@@ -42,7 +42,7 @@ export class StatusBarManager {
             // Branch statistics (committed changes since branching)
             if (this.showBranchStats && !gitStats.isMainBranch && 
                 (gitStats.branchAdditions > 0 || gitStats.branchDeletions > 0)) {
-                parts.push(`$(diff-added)${gitStats.branchAdditions} $(diff-removed)${gitStats.branchDeletions}`);
+                parts.push(`(branch: +${gitStats.branchAdditions}/-${gitStats.branchDeletions})`);
             }
             
             // Working changes (uncommitted)
@@ -51,11 +51,19 @@ export class StatusBarManager {
                 const totalDeletions = gitStats.workingDeletions;
                 
                 if (totalAdditions > 0 || totalDeletions > 0) {
-                    parts.push(`[$(diff-added)${totalAdditions} $(diff-removed)${totalDeletions}]`);
+                    parts.push(`[local: +${totalAdditions}/-${totalDeletions}]`);
                 }
             }
             
             this.statusBarItem.text = parts.join(' ');
+            
+            // Set background color based on changes
+            const hasUncommittedChanges = (gitStats.workingAdditions + gitStats.untrackedLines + gitStats.workingDeletions) > 0;
+            if (hasUncommittedChanges) {
+                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            } else {
+                this.statusBarItem.backgroundColor = undefined;
+            }
             
             // Build tooltip
             const tooltipLines: string[] = [
