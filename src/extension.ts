@@ -12,6 +12,7 @@ let cache: Cache | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Git Stats extension is now active!');
+    vscode.window.showInformationMessage('Git Stats extension activated!');
 
     // Initialize components
     lineCounter = new LineCounter();
@@ -21,8 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Get initial workspace folder
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (workspaceFolder) {
+        console.log('Git Stats: Found workspace folder:', workspaceFolder.uri.fsPath);
         gitManager = new GitManager(workspaceFolder);
         startMonitoring();
+    } else {
+        console.log('Git Stats: No workspace folder found');
+        vscode.window.showWarningMessage('Git Stats: No workspace folder open');
+        // Still show status bar with basic info
+        statusBarManager.show();
     }
 
     // Register commands

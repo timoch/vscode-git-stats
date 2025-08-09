@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import simpleGit, { SimpleGit, DiffResult } from 'simple-git';
 import * as path from 'path';
 import * as fs from 'fs';
 import { promisify } from 'util';
+import { exec } from 'child_process';
 
 const readFile = promisify(fs.readFile);
+const execAsync = promisify(exec);
 
 export interface GitStats {
     branch: string;
@@ -17,18 +18,28 @@ export interface GitStats {
 }
 
 export class GitManager {
-    private git: SimpleGit;
     private workspaceRoot: string;
     private mainBranch: string | null = null;
 
     constructor(workspaceFolder: vscode.WorkspaceFolder) {
         this.workspaceRoot = workspaceFolder.uri.fsPath;
-        this.git = simpleGit(this.workspaceRoot);
+    }
+
+    private async execGit(command: string): Promise<string> {
+        try {
+            const { stdout } = await execAsync(`git ${command}`, {
+                cwd: this.workspaceRoot,
+                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+            });
+            return stdout.trim();
+        } catch (error: any) {
+            throw new Error(`Git command failed: ${error.message}`);
+        }
     }
 
     public async isGitRepository(): Promise<boolean> {
         try {
-            await this.git.revparse(['--git-dir']);
+            await this.execGit('rev-parse --git-dir');
             return true;
         } catch {
             return false;
@@ -42,8 +53,7 @@ export class GitManager {
             }
 
             // Get current branch
-            const status = await this.git.status();
-            const branch = status.current || 'unknown';
+            const branch = await this.getCurrentBranch();
 
             // Find main branch
             await this.findMainBranch();
@@ -56,9 +66,10 @@ export class GitManager {
             
             if (this.mainBranch && !isMainBranch) {
                 try {
-                    const diffSummary = await this.git.diffSummary([`${this.mainBranch}...HEAD`]);
-                    branchAdditions = diffSummary.insertions;
-                    branchDeletions = diffSummary.deletions;
+                    const diffStat = await this.execGit(`diff ${this.mainBranch}...HEAD --numstat`);
+                    const stats = this.parseNumstat(diffStat);
+                    branchAdditions = stats.additions;
+                    branchDeletions = stats.deletions;
                 } catch {
                     // Branch comparison failed, ignore
                 }
@@ -82,21 +93,37 @@ export class GitManager {
         }
     }
 
+    private async getCurrentBranch(): Promise<string> {
+        try {
+            const branch = await this.execGit('branch --show-current');
+            return branch || 'HEAD';
+        } catch {
+            // Fallback for older git versions
+            try {
+                const branch = await this.execGit('rev-parse --abbrev-ref HEAD');
+                return branch || 'HEAD';
+            } catch {
+                return 'unknown';
+            }
+        }
+    }
+
     private async findMainBranch(): Promise<void> {
         try {
-            const branches = await this.git.branch();
+            // Get all branches
+            const branches = await this.execGit('branch -a');
+            const branchList = branches.split('\n').map(b => b.trim());
             
-            // Check for 'main' first, then 'master'
-            if (branches.all.includes('main')) {
+            // Check for local 'main' first, then 'master'
+            if (branchList.some(b => b === 'main' || b === '* main')) {
                 this.mainBranch = 'main';
-            } else if (branches.all.includes('master')) {
+            } else if (branchList.some(b => b === 'master' || b === '* master')) {
                 this.mainBranch = 'master';
             } else {
                 // Check remote branches
-                const remoteBranches = await this.git.branch(['-r']);
-                if (remoteBranches.all.some(b => b.includes('origin/main'))) {
+                if (branchList.some(b => b.includes('remotes/origin/main'))) {
                     this.mainBranch = 'main';
-                } else if (remoteBranches.all.some(b => b.includes('origin/master'))) {
+                } else if (branchList.some(b => b.includes('remotes/origin/master'))) {
                     this.mainBranch = 'master';
                 }
             }
@@ -113,28 +140,35 @@ export class GitManager {
 
         try {
             // Get staged changes
-            const stagedDiff = await this.git.diff(['--cached', '--numstat']);
+            const stagedDiff = await this.execGit('diff --cached --numstat');
             const stagedStats = this.parseNumstat(stagedDiff);
             additions += stagedStats.additions;
             deletions += stagedStats.deletions;
 
             // Get unstaged changes
-            const unstagedDiff = await this.git.diff(['--numstat']);
+            const unstagedDiff = await this.execGit('diff --numstat');
             const unstagedStats = this.parseNumstat(unstagedDiff);
             additions += unstagedStats.additions;
             deletions += unstagedStats.deletions;
 
             // Count lines in untracked files
-            const status = await this.git.status();
-            for (const file of status.not_added) {
-                try {
-                    const filePath = path.join(this.workspaceRoot, file);
-                    const content = await readFile(filePath, 'utf-8');
-                    const lines = content.split('\n').length;
-                    untrackedLines += lines;
-                } catch {
-                    // Skip files we can't read
+            try {
+                const untrackedFiles = await this.execGit('ls-files --others --exclude-standard');
+                if (untrackedFiles) {
+                    const files = untrackedFiles.split('\n').filter(f => f.trim());
+                    for (const file of files) {
+                        try {
+                            const filePath = path.join(this.workspaceRoot, file);
+                            const content = await readFile(filePath, 'utf-8');
+                            const lines = content.split('\n').length;
+                            untrackedLines += lines;
+                        } catch {
+                            // Skip files we can't read
+                        }
+                    }
                 }
+            } catch {
+                // No untracked files or error getting them
             }
         } catch (error) {
             console.error('Error getting working changes:', error);
@@ -158,8 +192,11 @@ export class GitManager {
             if (parts.length >= 2) {
                 const added = parseInt(parts[0]) || 0;
                 const deleted = parseInt(parts[1]) || 0;
-                additions += added;
-                deletions += deleted;
+                // Skip binary files (shown as '-')
+                if (!isNaN(added) && !isNaN(deleted)) {
+                    additions += added;
+                    deletions += deleted;
+                }
             }
         }
 
@@ -168,8 +205,8 @@ export class GitManager {
 
     public async getCurrentHead(): Promise<string | null> {
         try {
-            const head = await this.git.revparse(['HEAD']);
-            return head.trim();
+            const head = await this.execGit('rev-parse HEAD');
+            return head;
         } catch {
             return null;
         }
@@ -177,13 +214,33 @@ export class GitManager {
 
     public async getStatus(): Promise<string> {
         try {
-            const status = await this.git.status();
-            return JSON.stringify({
-                modified: status.modified,
-                created: status.created,
-                deleted: status.deleted,
-                not_added: status.not_added
-            });
+            const status = await this.execGit('status --porcelain');
+            // Parse status output to match what was expected
+            const files = status.split('\n').filter(line => line.trim());
+            const result = {
+                modified: [] as string[],
+                created: [] as string[],
+                deleted: [] as string[],
+                not_added: [] as string[]
+            };
+
+            for (const line of files) {
+                if (line.length < 3) continue;
+                const statusCode = line.substring(0, 2);
+                const filename = line.substring(3);
+
+                if (statusCode.includes('M')) {
+                    result.modified.push(filename);
+                } else if (statusCode === '??') {
+                    result.not_added.push(filename);
+                } else if (statusCode.includes('A')) {
+                    result.created.push(filename);
+                } else if (statusCode.includes('D')) {
+                    result.deleted.push(filename);
+                }
+            }
+
+            return JSON.stringify(result);
         } catch {
             return '';
         }
