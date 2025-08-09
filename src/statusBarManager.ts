@@ -42,7 +42,7 @@ export class StatusBarManager {
             // Branch statistics (committed changes since branching)
             if (this.showBranchStats && !gitStats.isMainBranch && 
                 (gitStats.branchAdditions > 0 || gitStats.branchDeletions > 0)) {
-                parts.push(`$(diff-added) +${gitStats.branchAdditions}/$(diff-removed) -${gitStats.branchDeletions}`);
+                parts.push(`${gitStats.branchAdditions}/${gitStats.branchDeletions}`);
             }
             
             // Working changes (uncommitted)
@@ -51,7 +51,7 @@ export class StatusBarManager {
                 const totalDeletions = gitStats.workingDeletions;
                 
                 if (totalAdditions > 0 || totalDeletions > 0) {
-                    parts.push(`[$(diff-added) +${totalAdditions}/$(diff-removed) -${totalDeletions}]`);
+                    parts.push(`[${totalAdditions}/${totalDeletions}]`);
                 }
             }
             
