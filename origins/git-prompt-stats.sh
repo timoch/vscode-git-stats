@@ -137,7 +137,7 @@ count_project_lines() {
             -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" \
             -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" \
             -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" -not -path "*/.claude/*" \
-            -exec wc -l {} + | awk '{sum += $1} END {print sum}')
+            -exec wc -l {} + | awk '!/total/ {sum += $1} END {print sum}')
         
         if [ -z "$total_lines" ] || [ "$total_lines" = "0" ]; then
             total_lines="0"
@@ -544,7 +544,7 @@ debug_line_count() {
                         -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" \
                         -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" \
                         -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" -not -path "*/.claude/*" \
-                        -exec wc -l {} + 2>/dev/null | awk '{sum += $1} END {print sum}')
+                        -exec wc -l {} + 2>/dev/null | awk '!/total/ {sum += $1} END {print sum}')
                     echo "Lines at branch point: $base_count ($(format_line_count $base_count))"
                     echo "Difference: $((base_lines - base_count)) lines"
                 )

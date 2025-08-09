@@ -37,7 +37,7 @@ EXCLUSIONS='-not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/bi
 
 echo "TOTAL LINE COUNT (matching VS Code extension):"
 echo "==============================================="
-eval "find . -type f \( $FILE_PATTERNS \) $EXCLUSIONS -exec wc -l {} + 2>/dev/null | awk '{sum += \$1} END {print \"Total lines: \" sum}'"
+eval "find . -type f \( $FILE_PATTERNS \) $EXCLUSIONS -exec wc -l {} + 2>/dev/null | awk '!/total/ {sum += \$1} END {print \"Total lines: \" sum}'"
 echo ""
 
 echo "FILE COUNT:"
@@ -54,7 +54,7 @@ echo "----------|-------|------"
 for ext in "${EXTENSIONS[@]}"; do
     FILE_COUNT=$(eval "find . -type f -name \"*.$ext\" $EXCLUSIONS 2>/dev/null | wc -l")
     if [ "$FILE_COUNT" -gt 0 ]; then
-        LINE_COUNT=$(eval "find . -type f -name \"*.$ext\" $EXCLUSIONS -exec wc -l {} + 2>/dev/null | awk '{sum += \$1} END {print sum}'")
+        LINE_COUNT=$(eval "find . -type f -name \"*.$ext\" $EXCLUSIONS -exec wc -l {} + 2>/dev/null | awk '!/total/ {sum += \$1} END {print sum}'")
         printf "%-9s | %5d | %s\n" "$ext" "$FILE_COUNT" "$LINE_COUNT"
     fi
 done | sort -t'|' -k3 -rn | head -20

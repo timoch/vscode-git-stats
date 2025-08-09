@@ -33,7 +33,9 @@ export class LineCounter {
             fileCount: 0
         };
 
+        console.log(`Git Stats: Starting line count in ${rootPath}`);
         await this.countLinesRecursive(rootPath, rootPath, result);
+        console.log(`Git Stats: Counted ${result.fileCount} files, ${result.totalLines} lines`);
         return result;
     }
 
@@ -47,6 +49,10 @@ export class LineCounter {
                 
                 // Check if path matches any exclude pattern
                 if (this.isExcluded(relativePath)) {
+                    // Debug: Log excluded paths
+                    if (relativePath.endsWith('.cs') || relativePath.endsWith('.sql')) {
+                        console.log(`Git Stats: Excluded ${relativePath}`);
+                    }
                     continue;
                 }
 
