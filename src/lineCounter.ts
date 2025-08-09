@@ -119,14 +119,16 @@ export class LineCounter {
             if (content.length === 0) {
                 return 0;
             }
-            // Count actual lines like wc -l does
-            // Split by any line ending (CRLF or LF)
-            const lines = content.split(/\r?\n/);
-            // Remove empty last element if file ends with newline
-            if (lines[lines.length - 1] === '') {
-                return lines.length - 1;
+            
+            // Count lines exactly like wc -l does:
+            // wc -l counts the number of newline characters
+            let count = 0;
+            for (let i = 0; i < content.length; i++) {
+                if (content[i] === '\n') {
+                    count++;
+                }
             }
-            return lines.length;
+            return count;
         } catch (error) {
             return 0;
         }
