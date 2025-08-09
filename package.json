@@ -2,7 +2,7 @@
   "name": "timoch-git-stats",
   "displayName": "Timoch Git Stats",
   "description": "Display git repository statistics including line counts and changes in the status bar",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publisher": "timoch",
   "repository": {
     "type": "git",
