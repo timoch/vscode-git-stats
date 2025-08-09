@@ -1,0 +1,113 @@
+{
+  "name": "timoch-git-stats",
+  "displayName": "Timoch Git Stats",
+  "description": "Display git repository statistics including line counts and changes in the status bar",
+  "version": "1.0.0",
+  "publisher": "timoch",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitStats.refresh",
+        "title": "Git Stats: Refresh Statistics"
+      },
+      {
+        "command": "gitStats.showDetails",
+        "title": "Git Stats: Show Detailed Statistics"
+      },
+      {
+        "command": "gitStats.clearCache",
+        "title": "Git Stats: Clear Cache"
+      }
+    ],
+    "configuration": {
+      "title": "Git Stats",
+      "properties": {
+        "gitStats.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Git Stats extension"
+        },
+        "gitStats.updateInterval": {
+          "type": "number",
+          "default": 5000,
+          "description": "Update interval in milliseconds (minimum 1000)"
+        },
+        "gitStats.showBranchStats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show branch statistics (lines added/removed since main/master)"
+        },
+        "gitStats.showWorkingChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show working directory changes (staged/unstaged/untracked)"
+        },
+        "gitStats.excludePatterns": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/bin/**",
+            "**/obj/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/*.min.*",
+            "**/package-lock.json",
+            "**/cdk.out/**",
+            "**/cdk.context.json",
+            "**/.cdk.staging/**",
+            "**/.claude/**"
+          ],
+          "description": "Glob patterns for files to exclude from line counting"
+        },
+        "gitStats.includeExtensions": {
+          "type": "array",
+          "default": [
+            "cs", "ts", "tsx", "js", "jsx",
+            "json", "xml", "yaml", "yml",
+            "md", "txt", "sh", "ps1",
+            "psm1", "psd1", "csproj", "sln",
+            "razor", "css", "scss", "html",
+            "py", "java", "cpp", "c", "h",
+            "hpp", "go", "rs", "rb", "php",
+            "swift", "kt", "scala", "r", "sql"
+          ],
+          "description": "File extensions to include in line counting"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "typescript": "^4.9.3"
+  },
+  "dependencies": {
+    "simple-git": "^3.20.0"
+  }
+}
