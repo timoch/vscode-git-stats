@@ -116,7 +116,16 @@ export class LineCounter {
     private async countFileLines(filePath: string): Promise<number> {
         try {
             const content = await readFile(filePath, 'utf-8');
-            const lines = content.split('\n');
+            if (content.length === 0) {
+                return 0;
+            }
+            // Count actual lines like wc -l does
+            // Split by any line ending (CRLF or LF)
+            const lines = content.split(/\r?\n/);
+            // Remove empty last element if file ends with newline
+            if (lines[lines.length - 1] === '') {
+                return lines.length - 1;
+            }
             return lines.length;
         } catch (error) {
             return 0;

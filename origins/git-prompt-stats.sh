@@ -122,16 +122,21 @@ count_project_lines() {
         fi
         
         # Fast line counting using find to only count existing files
+        # Excludes .git and .claude directories to match VS Code extension
         local total_lines=$(find . -type f \( \
             -name "*.cs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \
             -o -name "*.json" -o -name "*.xml" -o -name "*.yaml" -o -name "*.yml" \
             -o -name "*.md" -o -name "*.txt" -o -name "*.sh" -o -name "*.ps1" \
             -o -name "*.psm1" -o -name "*.psd1" -o -name "*.csproj" -o -name "*.sln" \
             -o -name "*.razor" -o -name "*.css" -o -name "*.scss" -o -name "*.html" \
-            \) -not -path "*/node_modules/*" -not -path "*/bin/*" -not -path "*/obj/*" \
-            -not -path "*/dist/*" -not -path "*/build/*" -not -name "*.min.*" \
-            -not -name "package-lock.json" -not -path "*/cdk.out/*" \
-            -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" \
+            -o -name "*.sql" -o -name "*.py" -o -name "*.java" -o -name "*.cpp" \
+            -o -name "*.c" -o -name "*.h" -o -name "*.hpp" -o -name "*.go" \
+            -o -name "*.rs" -o -name "*.rb" -o -name "*.php" -o -name "*.swift" \
+            -o -name "*.kt" -o -name "*.scala" -o -name "*.r" \
+            \) -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/bin/*" \
+            -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" \
+            -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" \
+            -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" -not -path "*/.claude/*" \
             -exec wc -l {} + | awk '{sum += $1} END {print sum}')
         
         if [ -z "$total_lines" ] || [ "$total_lines" = "0" ]; then
@@ -449,6 +454,8 @@ show_excluded_files() {
     if git rev-parse --git-dir > /dev/null 2>&1; then
         echo ""
         echo "Excluded directories (with file counts):"
+        echo "  .git/: $(find . -path "*/.git/*" -type f 2>/dev/null | wc -l) files"
+        echo "  .claude/: $(find . -path "*/.claude/*" -type f 2>/dev/null | wc -l) files"
         echo "  node_modules/: $(find . -path "*/node_modules/*" -type f 2>/dev/null | wc -l) files"
         echo "  bin/: $(find . -path "*/bin/*" -type f 2>/dev/null | wc -l) files"
         echo "  obj/: $(find . -path "*/obj/*" -type f 2>/dev/null | wc -l) files"
@@ -529,10 +536,14 @@ debug_line_count() {
                         -o -name "*.md" -o -name "*.txt" -o -name "*.sh" -o -name "*.ps1" \
                         -o -name "*.psm1" -o -name "*.psd1" -o -name "*.csproj" -o -name "*.sln" \
                         -o -name "*.razor" -o -name "*.css" -o -name "*.scss" -o -name "*.html" \
-                        \) -not -path "*/node_modules/*" -not -path "*/bin/*" -not -path "*/obj/*" \
-                        -not -path "*/dist/*" -not -path "*/build/*" -not -name "*.min.*" \
-                        -not -name "package-lock.json" -not -path "*/cdk.out/*" \
-                        -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" \
+                        -o -name "*.sql" -o -name "*.py" -o -name "*.java" -o -name "*.cpp" \
+                        -o -name "*.c" -o -name "*.h" -o -name "*.hpp" -o -name "*.go" \
+                        -o -name "*.rs" -o -name "*.rb" -o -name "*.php" -o -name "*.swift" \
+                        -o -name "*.kt" -o -name "*.scala" -o -name "*.r" \
+                        \) -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/bin/*" \
+                        -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" \
+                        -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" \
+                        -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" -not -path "*/.claude/*" \
                         -exec wc -l {} + 2>/dev/null | awk '{sum += $1} END {print sum}')
                     echo "Lines at branch point: $base_count ($(format_line_count $base_count))"
                     echo "Difference: $((base_lines - base_count)) lines"

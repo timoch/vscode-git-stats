@@ -14,7 +14,8 @@ echo ""
 # Define the file patterns and exclusions from the bash script
 FILE_PATTERNS='-name "*.cs" -o -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.json" -o -name "*.xml" -o -name "*.yaml" -o -name "*.yml" -o -name "*.md" -o -name "*.txt" -o -name "*.sh" -o -name "*.ps1" -o -name "*.psm1" -o -name "*.psd1" -o -name "*.csproj" -o -name "*.sln" -o -name "*.razor" -o -name "*.css" -o -name "*.scss" -o -name "*.html"'
 
-EXCLUSIONS='-not -path "*/node_modules/*" -not -path "*/bin/*" -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" -not -name "cdk.context.json" -not -path "*/.cdk.staging/*"'
+# Exclusions now match VS Code extension defaults
+EXCLUSIONS='-not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/bin/*" -not -path "*/obj/*" -not -path "*/dist/*" -not -path "*/build/*" -not -name "*.min.*" -not -name "package-lock.json" -not -path "*/cdk.out/*" -not -name "cdk.context.json" -not -path "*/.cdk.staging/*" -not -path "*/.claude/*"'
 
 echo "1. TOTAL LINE COUNT (as bash script calculates):"
 echo "================================================="
