@@ -1,0 +1,7 @@
+Create a 128x128 PNG icon named 'icon.png' in this directory.
+The icon should represent git statistics or line counting.
+You can use tools like:
+- GIMP
+- Photoshop
+- Canva
+- Or generate one with AI tools

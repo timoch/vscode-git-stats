@@ -4,6 +4,14 @@
   "description": "Display git repository statistics including line counts and changes in the status bar",
   "version": "1.0.0",
   "publisher": "timoch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timoch/vscode-git-stats.git"
+  },
+  "bugs": {
+    "url": "https://github.com/timoch/vscode-git-stats/issues"
+  },
+  "homepage": "https://github.com/timoch/vscode-git-stats#readme",
   "engines": {
     "vscode": "^1.74.0"
   },
