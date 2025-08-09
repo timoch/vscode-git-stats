@@ -120,15 +120,17 @@ export class LineCounter {
                 return 0;
             }
             
-            // Count lines exactly like wc -l does:
-            // wc -l counts the number of newline characters
-            let count = 0;
-            for (let i = 0; i < content.length; i++) {
-                if (content[i] === '\n') {
-                    count++;
-                }
+            // Count logical lines for developers
+            // Split by newlines and count non-empty content
+            const lines = content.split(/\r?\n/);
+            
+            // If file ends with newline, last element will be empty
+            if (lines[lines.length - 1] === '') {
+                return lines.length - 1;
             }
-            return count;
+            
+            // If file doesn't end with newline, count all lines
+            return lines.length;
         } catch (error) {
             return 0;
         }
