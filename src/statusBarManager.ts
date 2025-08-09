@@ -32,9 +32,6 @@ export class StatusBarManager {
         } else {
             const parts: string[] = [];
             
-            // Git branch icon and name
-            parts.push(`$(git-branch) ${gitStats.branch}`);
-            
             // Line count
             const formattedLines = this.lineCounter.formatLineCount(totalLines);
             parts.push(`$(file-text) ${formattedLines}`);
@@ -56,14 +53,6 @@ export class StatusBarManager {
             }
             
             this.statusBarItem.text = parts.join(' ');
-            
-            // Set background color based on changes
-            const hasUncommittedChanges = (gitStats.workingAdditions + gitStats.untrackedLines + gitStats.workingDeletions) > 0;
-            if (hasUncommittedChanges) {
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-            } else {
-                this.statusBarItem.backgroundColor = undefined;
-            }
             
             // Build tooltip
             const tooltipLines: string[] = [
