@@ -245,4 +245,71 @@ export class GitManager {
             return '';
         }
     }
+
+    public async getRepositoryAge(): Promise<{ firstCommitDate: Date | null; totalCommits: number; contributors: number }> {
+        try {
+            // Get first commit date
+            let firstCommitDate: Date | null = null;
+            try {
+                const firstCommit = await this.execGit('log --reverse --format=%at --max-count=1');
+                if (firstCommit) {
+                    firstCommitDate = new Date(parseInt(firstCommit) * 1000);
+                }
+            } catch {
+                // No commits yet
+            }
+
+            // Get total commits
+            let totalCommits = 0;
+            try {
+                const commitCount = await this.execGit('rev-list --count HEAD');
+                totalCommits = parseInt(commitCount) || 0;
+            } catch {
+                // No commits yet
+            }
+
+            // Get number of contributors
+            let contributors = 0;
+            try {
+                const authorList = await this.execGit('log --format=%ae | sort -u | wc -l');
+                contributors = parseInt(authorList) || 0;
+            } catch {
+                // Try alternative method
+                try {
+                    const authors = await this.execGit('shortlog -sn');
+                    contributors = authors.split('\n').filter(line => line.trim()).length;
+                } catch {
+                    // No contributors
+                }
+            }
+
+            return { firstCommitDate, totalCommits, contributors };
+        } catch {
+            return { firstCommitDate: null, totalCommits: 0, contributors: 0 };
+        }
+    }
+
+    public async getRecentlyModifiedFiles(limit: number = 10): Promise<Array<{ path: string; date: Date }>> {
+        try {
+            const recentFiles = await this.execGit(`log --name-only --pretty=format:%at -${limit * 2}`);
+            const lines = recentFiles.split('\n');
+            const files: Array<{ path: string; date: Date }> = [];
+            const seen = new Set<string>();
+            let currentDate: Date | null = null;
+
+            for (const line of lines) {
+                if (line.match(/^\d+$/)) {
+                    currentDate = new Date(parseInt(line) * 1000);
+                } else if (line.trim() && currentDate && !seen.has(line)) {
+                    seen.add(line);
+                    files.push({ path: line, date: currentDate });
+                    if (files.length >= limit) break;
+                }
+            }
+
+            return files;
+        } catch {
+            return [];
+        }
+    }
 }

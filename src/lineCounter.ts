@@ -2,14 +2,21 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { promisify } from 'util';
+import { exec } from 'child_process';
 
 const readFile = promisify(fs.readFile);
-const readdir = promisify(fs.readdir);
-const stat = promisify(fs.stat);
+const execAsync = promisify(exec);
+
+export interface FileInfo {
+    path: string;
+    lines: number;
+    extension: string;
+}
 
 export interface LineCountResult {
     totalLines: number;
     fileCount: number;
+    files: FileInfo[];
 }
 
 export class LineCounter {
@@ -30,17 +37,98 @@ export class LineCounter {
         const rootPath = workspaceFolder.uri.fsPath;
         const result: LineCountResult = {
             totalLines: 0,
-            fileCount: 0
+            fileCount: 0,
+            files: []
         };
 
         console.log(`Git Stats: Starting line count in ${rootPath}`);
-        await this.countLinesRecursive(rootPath, rootPath, result);
+        
+        // Check if this is a git repository
+        const isGitRepo = await this.isGitRepository(rootPath);
+        
+        if (isGitRepo) {
+            // Use git to get tracked and untracked (but not ignored) files
+            await this.countLinesUsingGit(rootPath, result);
+        } else {
+            // Fall back to filesystem traversal for non-git directories
+            await this.countLinesUsingFilesystem(rootPath, result);
+        }
+        
         console.log(`Git Stats: Counted ${result.fileCount} files, ${result.totalLines} lines`);
         return result;
     }
 
+    private async isGitRepository(rootPath: string): Promise<boolean> {
+        try {
+            await execAsync('git rev-parse --git-dir', { cwd: rootPath });
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async countLinesUsingGit(rootPath: string, result: LineCountResult): Promise<void> {
+        try {
+            // Get all tracked files
+            const { stdout: trackedFiles } = await execAsync('git ls-files', {
+                cwd: rootPath,
+                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+            });
+
+            // Get untracked files that are not ignored
+            const { stdout: untrackedFiles } = await execAsync('git ls-files --others --exclude-standard', {
+                cwd: rootPath,
+                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+            });
+
+            // Combine both lists
+            const allFiles = [
+                ...trackedFiles.split('\n').filter(f => f.trim()),
+                ...untrackedFiles.split('\n').filter(f => f.trim())
+            ];
+
+            // Count lines for each file
+            for (const file of allFiles) {
+                if (!file) continue;
+                
+                // Check if file should be included based on extension
+                const filename = path.basename(file);
+                if (!this.shouldIncludeFile(filename)) {
+                    continue;
+                }
+
+                const fullPath = path.join(rootPath, file);
+                try {
+                    const lines = await this.countFileLines(fullPath);
+                    const extension = path.extname(filename).toLowerCase().slice(1) || 'no-ext';
+                    result.totalLines += lines;
+                    result.fileCount++;
+                    result.files.push({
+                        path: file,
+                        lines: lines,
+                        extension: extension
+                    });
+                } catch (error) {
+                    // Skip files we can't read
+                    console.log(`Git Stats: Could not read ${file}`);
+                }
+            }
+        } catch (error) {
+            console.error('Git Stats: Error using git commands, falling back to filesystem:', error);
+            // Fall back to filesystem traversal if git commands fail
+            await this.countLinesUsingFilesystem(rootPath, result);
+        }
+    }
+
+    private async countLinesUsingFilesystem(rootPath: string, result: LineCountResult): Promise<void> {
+        // This is the fallback method for non-git directories
+        // It uses the exclude patterns from configuration
+        await this.countLinesRecursive(rootPath, rootPath, result);
+    }
+
     private async countLinesRecursive(rootPath: string, currentPath: string, result: LineCountResult): Promise<void> {
         try {
+            const { readdir, stat } = fs.promises;
             const items = await readdir(currentPath);
             
             for (const item of items) {
@@ -49,10 +137,6 @@ export class LineCounter {
                 
                 // Check if path matches any exclude pattern
                 if (this.isExcluded(relativePath)) {
-                    // Debug: Log excluded paths
-                    if (relativePath.endsWith('.cs') || relativePath.endsWith('.sql')) {
-                        console.log(`Git Stats: Excluded ${relativePath}`);
-                    }
                     continue;
                 }
 
@@ -66,8 +150,14 @@ export class LineCounter {
                     await this.countLinesRecursive(rootPath, fullPath, result);
                 } else if (itemStat.isFile() && this.shouldIncludeFile(item)) {
                     const lines = await this.countFileLines(fullPath);
+                    const extension = path.extname(item).toLowerCase().slice(1) || 'no-ext';
                     result.totalLines += lines;
                     result.fileCount++;
+                    result.files.push({
+                        path: relativePath,
+                        lines: lines,
+                        extension: extension
+                    });
                 }
             }
         } catch (error) {
