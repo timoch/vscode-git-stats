@@ -20,6 +20,7 @@ export interface GitStats {
 export class GitManager {
     private workspaceRoot: string;
     private mainBranch: string | null = null;
+    private upstreamBranch: string | null = null;
 
     constructor(workspaceFolder: vscode.WorkspaceFolder) {
         this.workspaceRoot = workspaceFolder.uri.fsPath;
@@ -60,18 +61,25 @@ export class GitManager {
             
             const isMainBranch = branch === this.mainBranch;
 
-            // Get branch statistics (commits since branching from main/master)
+            // Get branch statistics (commits since branching from main/master or upstream)
             let branchAdditions = 0;
             let branchDeletions = 0;
             
             if (this.mainBranch && !isMainBranch) {
                 try {
-                    const diffStat = await this.execGit(`diff ${this.mainBranch}...HEAD --numstat`);
-                    const stats = this.parseNumstat(diffStat);
-                    branchAdditions = stats.additions;
-                    branchDeletions = stats.deletions;
-                } catch {
+                    // Get the best comparison branch (local or upstream, whichever is later)
+                    const comparisonBranch = await this.getComparisonBranch();
+                    
+                    if (comparisonBranch) {
+                        const diffStat = await this.execGit(`diff ${comparisonBranch}...HEAD --numstat`);
+                        const stats = this.parseNumstat(diffStat);
+                        branchAdditions = stats.additions;
+                        branchDeletions = stats.deletions;
+                        console.log(`Git Stats: Comparing against ${comparisonBranch} for branch statistics`);
+                    }
+                } catch (error) {
                     // Branch comparison failed, ignore
+                    console.log('Git Stats: Could not compute branch statistics:', error);
                 }
             }
 
@@ -119,17 +127,94 @@ export class GitManager {
                 this.mainBranch = 'main';
             } else if (branchList.some(b => b === 'master' || b === '* master')) {
                 this.mainBranch = 'master';
-            } else {
-                // Check remote branches
-                if (branchList.some(b => b.includes('remotes/origin/main'))) {
+            }
+            
+            // Check for upstream branches
+            if (branchList.some(b => b.includes('remotes/origin/main'))) {
+                this.upstreamBranch = 'origin/main';
+                if (!this.mainBranch) {
                     this.mainBranch = 'main';
-                } else if (branchList.some(b => b.includes('remotes/origin/master'))) {
+                }
+            } else if (branchList.some(b => b.includes('remotes/origin/master'))) {
+                this.upstreamBranch = 'origin/master';
+                if (!this.mainBranch) {
                     this.mainBranch = 'master';
                 }
             }
         } catch {
             // Failed to find main branch
             this.mainBranch = null;
+            this.upstreamBranch = null;
+        }
+    }
+
+    private async getComparisonBranch(): Promise<string | null> {
+        // If we don't have a main branch, return null
+        if (!this.mainBranch) {
+            return null;
+        }
+
+        // If we don't have an upstream branch, use local main
+        if (!this.upstreamBranch) {
+            return this.mainBranch;
+        }
+
+        try {
+            // Try to fetch latest from upstream (with timeout to avoid hanging)
+            try {
+                await this.execGit('fetch origin --timeout=5');
+            } catch {
+                // Fetch failed (offline or timeout), continue with local comparison
+                console.log('Git Stats: Could not fetch from upstream, using local branches');
+            }
+
+            // Compare local main with upstream to see which is ahead
+            const localCommit = await this.execGit(`rev-parse ${this.mainBranch}`);
+            const upstreamCommit = await this.execGit(`rev-parse ${this.upstreamBranch}`);
+
+            // If they're the same, use local (to avoid network dependencies)
+            if (localCommit === upstreamCommit) {
+                return this.mainBranch;
+            }
+
+            // Check if local is behind upstream
+            try {
+                // Check if local main is ancestor of upstream (meaning upstream is ahead)
+                await this.execGit(`merge-base --is-ancestor ${this.mainBranch} ${this.upstreamBranch}`);
+                // If command succeeds, local is behind upstream
+                return this.upstreamBranch;
+            } catch {
+                // Local is not behind upstream
+            }
+
+            // Check if upstream is behind local
+            try {
+                // Check if upstream is ancestor of local (meaning local is ahead)
+                await this.execGit(`merge-base --is-ancestor ${this.upstreamBranch} ${this.mainBranch}`);
+                // If command succeeds, upstream is behind local
+                return this.mainBranch;
+            } catch {
+                // Branches have diverged
+            }
+
+            // If branches have diverged, compare commit counts from common ancestor
+            try {
+                const localAhead = await this.execGit(`rev-list --count ${this.upstreamBranch}..${this.mainBranch}`);
+                const upstreamAhead = await this.execGit(`rev-list --count ${this.mainBranch}..${this.upstreamBranch}`);
+                
+                const localCount = parseInt(localAhead) || 0;
+                const upstreamCount = parseInt(upstreamAhead) || 0;
+                
+                // Use whichever branch has more commits ahead
+                return upstreamCount > localCount ? this.upstreamBranch : this.mainBranch;
+            } catch {
+                // If comparison fails, fall back to local
+                return this.mainBranch;
+            }
+        } catch (error) {
+            console.error('Git Stats: Error determining comparison branch:', error);
+            // On any error, fall back to local main branch
+            return this.mainBranch;
         }
     }
 
