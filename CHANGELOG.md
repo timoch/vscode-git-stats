@@ -2,6 +2,21 @@
 
 All notable changes to the "timoch-git-stats" extension will be documented in this file.
 
+## [1.2.0] - 2025-01-30
+
+### Added
+- Binary file exclusion from line counting using multiple detection strategies
+- Intelligent branch comparison that uses the latest between local main/master and upstream
+
+### Enhanced
+- Line count comparisons now check against whichever is more recent: local main/master or origin/main/master
+- Binary files are automatically detected and excluded using git's text file detection, file extensions, and content analysis
+- Improved accuracy by only counting actual source code and text files
+
+### Fixed
+- Binary files no longer contribute to line count statistics
+- Branch comparison now properly handles offline scenarios with graceful fallback
+
 ## [1.1.0] - 2025-01-10
 
 ### Fixed
