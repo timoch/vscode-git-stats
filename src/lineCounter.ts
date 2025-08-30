@@ -87,6 +87,20 @@ export class LineCounter {
                 ...untrackedFiles.split('\n').filter(f => f.trim())
             ];
 
+            // Get list of text (non-binary) files using git grep
+            // This will only return files that git considers as text
+            let textFiles = new Set<string>();
+            try {
+                const { stdout: textFilesList } = await execAsync('git grep -Il ""', {
+                    cwd: rootPath,
+                    maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+                });
+                textFilesList.split('\n').filter(f => f.trim()).forEach(f => textFiles.add(f));
+            } catch {
+                // If git grep fails (e.g., no commits yet), check all files
+                textFiles = new Set(allFiles);
+            }
+
             // Count lines for each file
             for (const file of allFiles) {
                 if (!file) continue;
@@ -99,6 +113,13 @@ export class LineCounter {
 
                 const fullPath = path.join(rootPath, file);
                 try {
+                    // Check if file is binary
+                    const isBinary = await this.isBinaryFile(fullPath, file, textFiles);
+                    if (isBinary) {
+                        console.log(`Git Stats: Skipping binary file ${file}`);
+                        continue;
+                    }
+
                     const lines = await this.countFileLines(fullPath);
                     const extension = path.extname(filename).toLowerCase().slice(1) || 'no-ext';
                     result.totalLines += lines;
@@ -149,6 +170,13 @@ export class LineCounter {
                     }
                     await this.countLinesRecursive(rootPath, fullPath, result);
                 } else if (itemStat.isFile() && this.shouldIncludeFile(item)) {
+                    // Check if file is binary using basic heuristics
+                    const isBinary = await this.isBinaryFile(fullPath, relativePath, new Set());
+                    if (isBinary) {
+                        console.log(`Git Stats: Skipping binary file ${relativePath}`);
+                        continue;
+                    }
+
                     const lines = await this.countFileLines(fullPath);
                     const extension = path.extname(item).toLowerCase().slice(1) || 'no-ext';
                     result.totalLines += lines;
@@ -207,6 +235,61 @@ export class LineCounter {
             return specialFiles.includes(filename);
         }
         return this.includeExtensions.includes(extension);
+    }
+
+    private async isBinaryFile(filePath: string, relativePath: string, textFiles: Set<string>): Promise<boolean> {
+        // If git already told us it's a text file, trust that
+        if (textFiles.size > 0 && textFiles.has(relativePath)) {
+            return false;
+        }
+
+        // Check common binary extensions
+        const binaryExtensions = [
+            '.exe', '.dll', '.so', '.dylib', '.a', '.lib', '.o', '.obj',
+            '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp',
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.jar', '.war',
+            '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ogg',
+            '.ttf', '.otf', '.woff', '.woff2', '.eot',
+            '.pyc', '.pyo', '.class', '.dex',
+            '.db', '.sqlite', '.mdb'
+        ];
+        
+        const ext = path.extname(filePath).toLowerCase();
+        if (binaryExtensions.includes(ext)) {
+            return true;
+        }
+
+        // Read first few bytes to check for binary content
+        try {
+            const buffer = Buffer.alloc(8000);
+            const fd = await promisify(fs.open)(filePath, 'r');
+            const { bytesRead } = await promisify(fs.read)(fd, buffer, 0, 8000, 0);
+            await promisify(fs.close)(fd);
+
+            // Check for null bytes (common indicator of binary files)
+            for (let i = 0; i < bytesRead; i++) {
+                if (buffer[i] === 0) {
+                    return true;
+                }
+            }
+
+            // Check for high proportion of non-printable characters
+            let nonPrintable = 0;
+            for (let i = 0; i < bytesRead; i++) {
+                const byte = buffer[i];
+                // Count non-printable characters (excluding common whitespace)
+                if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
+                    nonPrintable++;
+                }
+            }
+
+            // If more than 30% non-printable, consider it binary
+            return (nonPrintable / bytesRead) > 0.3;
+        } catch {
+            // If we can't read the file, assume it's not binary
+            return false;
+        }
     }
 
     private async countFileLines(filePath: string): Promise<number> {
